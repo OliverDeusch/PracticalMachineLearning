@@ -1,0 +1,74 @@
+---
+title: "Practical Machine Learning Course Project"
+output: html_document
+---
+
+This course project uses accelerometer data from 6 participants performing barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har. We will use machine learning to build a model that can predict the 5 cases based on the accelerometer data. We will then use the model to predict for a test data set wether the excercises were performed correctly or incorrectly.
+
+# Download data
+```{r Get data}
+setwd("C:/Users/deuscoli/Desktop/Coursera_DataScience/8_Practical_Machine_Learning/")
+fileUrl1 <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+fileUrl2 <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+download.file(fileUrl1, destfile = "pml-training.csv", method = "wininet")    
+download.file(fileUrl2, destfile = "pml-testing.csv", method = "wininet")
+```
+
+
+# Data preprocessing
+Next we do some data cleaning and subset the all the training data into a training and validation set so that we can validate our model later. The data set has 160 variables. We need to retain the most important ones.
+```{r Preprocessing}
+library(caret)
+testing <- read.csv("pml-testing.csv")
+all_train <- read.csv("pml-training.csv")
+inTrainSet <- createDataPartition(all_train$classe, p = 0.8, list = FALSE)
+training <- all_train[inTrainSet, ]
+validation <- all_train[-inTrainSet, ]
+
+classe <- training$classe
+
+# Remove index variable x
+training <- training[ , -training$X]
+
+# Identify and remove columns with NAs
+training<-training[,colSums(is.na(training)) == 0]
+
+# Identify and remove variables with near zero variance as they will not have any predictive power.
+columnIndex <- nearZeroVar(training)
+training <- training[ , -columnIndex]
+#validation <- validation[ , -columnIndex]
+
+# Identify and remove non numeric variables
+numIndex <- sapply(training, is.numeric)
+training <-cbind(classe,training[,numIndex])
+```
+
+# Build Model
+We build a model using random forests.
+```{r Build and validate model, cache = TRUE}
+set.seed(1313)
+modelFit <- train(training$classe ~ . , method="rf", data=training)
+modelFit$finalModel
+```
+
+
+# Validate Model
+Use model to predict the validation data set and do confusion matrix to check performance.
+```{r Validate mode}
+validation <- validation[ , names(training)] # Limit validation set to only columns in training set
+vclasse <- validation$classe
+validation <- validation[ , -1]
+
+predv <- predict(modelFit$finalModel, validation)
+print(confusionMatrix(predv, vclasse))
+```
+
+The accuracy of our model is 0.9995 when tested against the validation data set.
+
+# Predict test data set
+Now we can predict the outcomes for our 20 test cases.
+```{r Predict test set}
+# Limit test set to only columns in training set
+testing <- testing[ , names(training)[-1]]
+predict(modelFit$finalModel, testing)
+```
